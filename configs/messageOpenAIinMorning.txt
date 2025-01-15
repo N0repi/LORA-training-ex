@@ -1,0 +1,26 @@
+So for fine-tuning, which I assume is the method used for training LORA's, https://github.com/kohya-ss/sd-scripts/blob/main/docs/config_README-en.md mentions, `metadata_file`. What is this? In all of my thousands of hours of training LORA's, I've never seen this parameter or at least I don't recognize it at the moment.
+
+My toml file is pretty short right now.
+
+`
+[general]
+shuffle_caption = true
+caption_extension = '.txt'
+keep_tokens = 1
+
+# This is a DreamBooth-style dataset
+[[datasets]]
+resolution = [1024, 1024]
+batch_size = 1
+keep_tokens = 2
+enable_bucket = true
+bucket_no_upscale =false
+bucket_reso_steps = 64
+min_bucket_reso = 768
+
+
+  [[datasets.subsets]]
+  image_dir = "/mnt/NAS/AI-ML/Yuki/trainingInputYuki_Subahibi"
+  metadata_file
+  caption_dropout_rate = 0.05
+`

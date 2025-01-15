@@ -1,0 +1,19 @@
+[general]
+shuffle_caption = false
+caption_extension = '.txt'
+keep_tokens = 1
+
+# This is a DreamBooth-style dataset
+[[datasets]]
+resolution = [1024, 1024]
+batch_size = 1
+# keep_tokens = 2
+enable_bucket = true
+bucket_no_upscale =false
+bucket_reso_steps = 64
+min_bucket_reso = 768
+
+
+  [[datasets.subsets]]
+  image_dir = "datasets/trainingInputYuki_Subahibi"
+  caption_dropout_rate = 0.0 # have to set to 0, shuffle_caption to false, and remove kee_tokens when caching text encoder

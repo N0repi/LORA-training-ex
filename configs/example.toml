@@ -1,0 +1,36 @@
+ [general]
+shuffle_caption = true
+caption_extension = '.txt'
+keep_tokens = 1
+
+# This is a DreamBooth-style dataset
+[[datasets]]
+resolution = 512
+batch_size = 4
+keep_tokens = 2
+
+  [[datasets.subsets]]
+  image_dir = 'C:\hoge'
+  class_tokens = 'hoge girl'
+  # This subset uses keep_tokens = 2 (the value of the parent datasets)
+
+  [[datasets.subsets]]
+  image_dir = 'C:\fuga'
+  class_tokens = 'fuga boy'
+  keep_tokens = 3
+
+  [[datasets.subsets]]
+  is_reg = true
+  image_dir = 'C:\reg'
+  class_tokens = 'human'
+  keep_tokens = 1
+
+# This is a fine-tuning dataset
+[[datasets]]
+resolution = [768, 768]
+batch_size = 2
+
+  [[datasets.subsets]]
+  image_dir = 'C:\piyo'
+  metadata_file = 'C:\piyo\piyo_md.json'
+  # This subset uses keep_tokens = 1 (the value of [general])
