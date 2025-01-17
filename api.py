@@ -17,7 +17,7 @@ def train_model():
             "--mixed_precision", "bf16",
             "--num_cpu_threads_per_process", "1",
             "/workspace/project/sd-scripts/flux_train_network.py",
-            "--pretrained_model_name_or_path", "/workspace/project/sd-scripts/models/flux_devFp8.safetensors",
+            "--pretrained_model_name_or_path", "/workspace/project/sd-scripts/models/flux1-dev-fp8.safetensors",
             "--clip_l", "/workspace/project/sd-scripts/models/clip_l.safetensors",
             "--t5xxl", "/workspace/project/sd-scripts/models/t5xxl_fp16.safetensors",
             "--ae", "/workspace/project/sd-scripts/models/ae.safetensors",
