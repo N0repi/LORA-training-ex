@@ -16,7 +16,7 @@ def train_model():
             "accelerate", "launch",
             "--mixed_precision", "bf16",
             "--num_cpu_threads_per_process", "1",
-            "flux_train_network.py",
+            "/workspace/project/sd-scripts/flux_train_network.py",
             "--pretrained_model_name_or_path", "models/flux_devFp8.safetensors",
             "--clip_l", "models/clip_l.safetensors",
             "--t5xxl", "models/t5xxl_fp16.safetensors",
