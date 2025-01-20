@@ -3,9 +3,10 @@
 # @dev Scope: Trains LORA using Kohya sd-scripts
 
 import os
+import uuid
 import shutil
 import subprocess
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import List, Optional  # Add Optional here
 from datetime import datetime
@@ -24,8 +25,16 @@ class TrainParams(BaseModel):
     cids: List[str] = Field(..., min_items=1)
     tags: Optional[dict] = {}  # Optional field, defaults to an empty dictionary
 
+job_status = {}
 @app.post("/train")
-def train_model(params: TrainParams):
+def train_model(params: TrainParams, background_tasks: BackgroundTasks):
+    job_id = str(uuid.uuid4())
+    job_status[job_id] = {"status": "in_progress", "wallet_address": params.wallet_address}
+    background_tasks.add_task(run_training_and_sync, params, job_id)
+    return {"message": "Training started", "job_id": job_id}
+
+
+def run_training_and_sync(params, job_id):
     try:
         # Base directories
         base_dir = f"/workspace/project/sd-scripts/user{params.wallet_address}"
@@ -126,25 +135,40 @@ min_bucket_reso = 768
         # Execute training
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         stdout, stderr = process.communicate()
-
         if process.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Training failed: {stderr}")
+            job_status[job_id]["status"] = "failed"
+            job_status[job_id]["error"] = stderr
+            return
 
-        if process.returncode != 0:
-            print("Training failed. Command output:")
-            print("STDOUT:", stdout)
-            print("STDERR:", stderr)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Training failed: {stderr}"
-            )
+        # Delete datasets folder after training to save storage
+        shutil.rmtree(dataset_dir, ignore_errors=True)
 
-        return {
-            "message": "Training completed successfully",
-            "model_path": model_output_path,
-            "stdout": stdout,
-            "stderr": stderr,
-        }
+        job_status[job_id]["status"] = "uploading"
+        sync_to_gcs(params.wallet_address, params.model_name)
+        job_status[job_id]["status"] = "completed"
+        job_status[job_id]["model_path"] = f"user/{params.wallet_address}/models/{params.model_name}.safetensors"
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        job_status[job_id]["status"] = "failed"
+        job_status[job_id]["error"] = str(e)
+
+
+def sync_to_gcs(wallet_address, model_name):
+    model_file = f"/workspace/project/sd-scripts/user/{wallet_address}/models/{model_name}.safetensors"
+    gcs_destination = f"gs://lorabucketnorepi/user/{wallet_address}/models/{model_name}.safetensors"
+
+    # Upload only models folder directly to the user's bucket directory
+    command = [
+        "gsutil", "cp",
+        model_file,
+        gcs_destination
+    ]
+
+    subprocess.run(command, check=True)
+
+
+@app.get("/train/status/{job_id}")
+def check_status(job_id: str):
+    if job_id not in job_status:
+        raise HTTPException(status_code=404, detail="Job ID not found")
+    return job_status[job_id]
