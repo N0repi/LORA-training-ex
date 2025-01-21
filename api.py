@@ -37,7 +37,7 @@ def train_model(params: TrainParams, background_tasks: BackgroundTasks):
 def run_training_and_sync(params, job_id):
     try:
         # Base directories
-        base_dir = f"/workspace/project/sd-scripts/user{params.wallet_address}"
+        base_dir = f"/workspace/project/sd-scripts/user/{params.wallet_address}"
         config_dir = f"{base_dir}/configs"
         model_dir = f"{base_dir}/models"
         dataset_dir = f"{base_dir}/datasets"
