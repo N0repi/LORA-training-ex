@@ -91,7 +91,7 @@ min_bucket_reso = 768
         # Command to execute
         command = [
             "accelerate", "launch",
-            "--mixed_precision", "bf16",
+            "--mixed_precision", "fp16",
             "--num_cpu_threads_per_process", "1",
             "/workspace/project/sd-scripts/flux_train_network.py",
             "--pretrained_model_name_or_path", "/workspace/project/sd-scripts/models/flux1-dev-fp8.safetensors",
@@ -129,7 +129,7 @@ min_bucket_reso = 768
             "--guidance_scale", "1.0",
             "--fused_backward_pass",
             "--blocks_to_swap", "4",
-            "--full_bf16"
+            # "--full_bf16"
         ]
 
         # Execute training
