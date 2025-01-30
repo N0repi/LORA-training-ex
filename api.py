@@ -91,7 +91,6 @@ min_bucket_reso = 768
         # Command to execute
         command = [
             "accelerate", "launch",
-            "--mixed_precision", "fp16",
             "--num_cpu_threads_per_process", "1",
             "/workspace/project/sd-scripts/flux_train_network.py",
             "--pretrained_model_name_or_path", "/workspace/project/sd-scripts/models/flux1-dev-fp8.safetensors",
@@ -106,8 +105,8 @@ min_bucket_reso = 768
             "--max_data_loader_n_workers", "2",
             "--seed", "42",
             "--gradient_checkpointing",
-            "--mixed_precision", "bf16",
-            "--save_precision", "bf16",
+            "--mixed_precision", "fp16",
+            "--save_precision", "fp16",
             "--network_module", "networks.lora_flux",
             "--network_dim", str(params.network_dim),  # Dynamic
             "--network_train_unet_only",
