@@ -22,7 +22,9 @@ class TrainParams(BaseModel):
     learning_rate: float
     max_train_epochs: int
     max_train_steps: int
-    cids: List[str] = Field(..., min_items=1)
+    dataset_source: str  # Either "ipfs" or "gcs"
+    dataset_name: Optional[str] = None  # Used only for GCS
+    cids: Optional[List[str]] = []  # Used only for IPFS
     tags: Optional[dict] = {}  # Optional field, defaults to an empty dictionary
 
 job_status = {}
@@ -45,25 +47,46 @@ def run_training_and_sync(params, job_id):
         os.makedirs(model_dir, exist_ok=True)
         os.makedirs(dataset_dir, exist_ok=True)
 
-        # Download images using IPFS CIDs and create tags if exist
-        for cid in params.cids:
-            file_path = os.path.join(dataset_dir, f"{cid}.png")
-            caption_path = os.path.join(dataset_dir, f"{cid}.caption")
-            try:
-                # Download the image using IPFS
-                if not os.path.isfile(file_path):
-                    download(cid, file_path)
+        if params.dataset_source == "ipfs":
+            # 🔹 Download images using IPFS (same as existing logic)
+            for cid in params.cids:
+                file_path = os.path.join(dataset_dir, f"{cid}.png")
+                caption_path = os.path.join(dataset_dir, f"{cid}.caption")
+                try:
+                    if not os.path.isfile(file_path):
+                        download(cid, file_path)
 
-                # Write the caption file only if tags are provided
-                tags = params.tags.get(cid, None)
-                if tags:
-                    with open(caption_path, "w") as caption_file:
-                        caption_file.write(tags)
-            except Exception as error:
-                raise HTTPException(status_code=500, detail=f"Error processing CID {cid}: {error}")
+                    tags = params.tags.get(cid, None)
+                    if tags:
+                        with open(caption_path, "w") as caption_file:
+                            caption_file.write(tags)
+                except Exception as error:
+                    raise HTTPException(status_code=500, detail=f"Error processing CID {cid}: {error}")
 
+        elif params.dataset_source == "gcs":
+            # 🔹 Download dataset from GCS
+            storage_client = storage.Client()
+            bucket_name = "privateuploads"
+            dataset_prefix = f"user/{params.wallet_address}/{params.dataset_name}/"
 
-        # Create a single TOML configuration file
+            bucket = storage_client.bucket(bucket_name)
+            blobs = bucket.list_blobs(prefix=dataset_prefix)
+
+            for blob in blobs:
+                # Skip directory placeholder files
+                if blob.name.endswith("/"):
+                    continue
+
+                file_name = blob.name.split("/")[-1]  # Extract the filename
+                local_path = os.path.join(dataset_dir, file_name)
+
+                print(f"Downloading {blob.name} to {local_path}...")
+                blob.download_to_filename(local_path)
+
+        else:
+            raise HTTPException(status_code=400, detail="Invalid dataset_source. Use 'ipfs' or 'gcs'.")
+
+        # Create TOML configuration file (same as before)
         config_path = f"{config_dir}/dataset_config.toml"
         with open(config_path, "w") as toml_file:
             toml_file.write(f"""
@@ -128,8 +151,8 @@ min_bucket_reso = 768
             "--guidance_scale", "1.0",
             "--fused_backward_pass",
             "--blocks_to_swap", "4",
-            # "--full_bf16"
         ]
+        # --full_bf16
 
         # Execute training
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
