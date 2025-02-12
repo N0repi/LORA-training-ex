@@ -24,7 +24,7 @@ class TrainParams(BaseModel):
     max_train_steps: int
     dataset_source: str  # Either "ipfs" or "gcs"
     dataset_name: Optional[str] = None  # Used only for GCS
-    cids: Optional[List[str]] = []  # Used only for IPFS
+    cids: Optional[List[str]] = None  # Used only for IPFS
     tags: Optional[dict] = {}  # Optional field, defaults to an empty dictionary
 
 job_status = {}
