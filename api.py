@@ -48,8 +48,8 @@ def run_training_and_sync(params, job_id):
         os.makedirs(model_dir, exist_ok=True)
         os.makedirs(dataset_dir, exist_ok=True)
 
+        # Handle IPFS dataset
         if params.dataset_source == "ipfs":
-            # 🔹 Download images using IPFS (same as existing logic)
             for cid in params.cids:
                 file_path = os.path.join(dataset_dir, f"{cid}.png")
                 caption_path = os.path.join(dataset_dir, f"{cid}.caption")
@@ -64,34 +64,45 @@ def run_training_and_sync(params, job_id):
                 except Exception as error:
                     raise HTTPException(status_code=500, detail=f"Error processing CID {cid}: {error}")
 
-    for blob in blobs:
-        # Skip directory placeholder files
-        if blob.name.endswith("/"):
-            continue
+        # Handle GCS dataset
+        elif params.dataset_source == "gcs":
+            try:
+                storage_client = storage.Client()
+                bucket_name = "privateuploads"
+                dataset_prefix = f"user/{params.wallet_address}/{params.dataset_name}/"
 
-        file_name = blob.name.split("/")[-1]  # Extract the filename
-        local_path = os.path.join(dataset_dir, file_name)
+                bucket = storage_client.bucket(bucket_name)
+                blobs = bucket.list_blobs(prefix=dataset_prefix)
 
-        print(f"Downloading {blob.name} to {local_path}...")
-        blob.download_to_filename(local_path)
+                for blob in blobs:
+                    if blob.name.endswith("/"):
+                        continue  # Skip directory placeholders
 
-        # 🔹 If the image has a corresponding .caption file, download it
-        if file_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
-            caption_blob_name = f"{blob.name}.caption"
-            caption_blob = bucket.blob(caption_blob_name)
+                    file_name = blob.name.split("/")[-1]
+                    local_path = os.path.join(dataset_dir, file_name)
 
-            caption_path = os.path.join(dataset_dir, f"{file_name}.caption")
+                    print(f"Downloading {blob.name} to {local_path}...")
+                    blob.download_to_filename(local_path)
 
-            if caption_blob.exists():
-                print(f"Downloading caption {caption_blob_name} to {caption_path}...")
-                caption_blob.download_to_filename(caption_path)
-            else:
-                print(f"No caption found for {file_name}. Skipping.")
+                    # 🔹 If the image has a corresponding `.caption` file, download it
+                    if file_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                        caption_blob_name = f"{blob.name}.caption"
+                        caption_blob = bucket.blob(caption_blob_name)
+                        caption_path = os.path.join(dataset_dir, f"{file_name}.caption")
+
+                        if caption_blob.exists():
+                            print(f"Downloading caption {caption_blob_name} to {caption_path}...")
+                            caption_blob.download_to_filename(caption_path)
+                        else:
+                            print(f"No caption found for {file_name}. Skipping.")
+
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error downloading dataset from GCS: {str(e)}")
 
         else:
             raise HTTPException(status_code=400, detail="Invalid dataset_source. Use 'ipfs' or 'gcs'.")
 
-        # Create TOML configuration file (same as before)
+        # ✅ Generate dataset config
         config_path = f"{config_dir}/dataset_config.toml"
         with open(config_path, "w") as toml_file:
             toml_file.write(f"""
