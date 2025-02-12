@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional  # Add Optional here
 from datetime import datetime
 from ipfs_api import download
+from google.cloud import storage
 
 app = FastAPI()
 
@@ -63,25 +64,29 @@ def run_training_and_sync(params, job_id):
                 except Exception as error:
                     raise HTTPException(status_code=500, detail=f"Error processing CID {cid}: {error}")
 
-        elif params.dataset_source == "gcs":
-            # 🔹 Download dataset from GCS
-            storage_client = storage.Client()
-            bucket_name = "privateuploads"
-            dataset_prefix = f"user/{params.wallet_address}/{params.dataset_name}/"
+    for blob in blobs:
+        # Skip directory placeholder files
+        if blob.name.endswith("/"):
+            continue
 
-            bucket = storage_client.bucket(bucket_name)
-            blobs = bucket.list_blobs(prefix=dataset_prefix)
+        file_name = blob.name.split("/")[-1]  # Extract the filename
+        local_path = os.path.join(dataset_dir, file_name)
 
-            for blob in blobs:
-                # Skip directory placeholder files
-                if blob.name.endswith("/"):
-                    continue
+        print(f"Downloading {blob.name} to {local_path}...")
+        blob.download_to_filename(local_path)
 
-                file_name = blob.name.split("/")[-1]  # Extract the filename
-                local_path = os.path.join(dataset_dir, file_name)
+        # 🔹 If the image has a corresponding .caption file, download it
+        if file_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+            caption_blob_name = f"{blob.name}.caption"
+            caption_blob = bucket.blob(caption_blob_name)
 
-                print(f"Downloading {blob.name} to {local_path}...")
-                blob.download_to_filename(local_path)
+            caption_path = os.path.join(dataset_dir, f"{file_name}.caption")
+
+            if caption_blob.exists():
+                print(f"Downloading caption {caption_blob_name} to {caption_path}...")
+                caption_blob.download_to_filename(caption_path)
+            else:
+                print(f"No caption found for {file_name}. Skipping.")
 
         else:
             raise HTTPException(status_code=400, detail="Invalid dataset_source. Use 'ipfs' or 'gcs'.")
