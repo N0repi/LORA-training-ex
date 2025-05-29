@@ -6,6 +6,7 @@ import os
 import uuid
 import shutil
 import subprocess
+import requests
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import List, Optional  # Add Optional here
@@ -84,17 +85,21 @@ def run_training_and_sync(params, job_id):
                     print(f"Downloading {blob.name} to {local_path}...")
                     blob.download_to_filename(local_path)
 
-                    # 🔹 If the image has a corresponding `.caption` file, download it
+                    # 🔹 Handle `.caption` files (Updated Logic)
                     if file_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
                         caption_blob_name = f"{blob.name}.caption"
                         caption_blob = bucket.blob(caption_blob_name)
                         caption_path = os.path.join(dataset_dir, f"{file_name}.caption")
 
+                        # ✅ If caption file exists in GCS, download it
                         if caption_blob.exists():
                             print(f"Downloading caption {caption_blob_name} to {caption_path}...")
                             caption_blob.download_to_filename(caption_path)
-                        else:
-                            print(f"No caption found for {file_name}. Skipping.")
+                        # ✅ Otherwise, check if a caption is provided in `params.tags`
+                        elif file_name in params.tags:
+                            print(f"Writing caption for {file_name}...")
+                            with open(caption_path, "w") as caption_file:
+                                caption_file.write(params.tags[file_name])
 
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Error downloading dataset from GCS: {str(e)}")
@@ -117,7 +122,7 @@ batch_size = 1
 enable_bucket = true
 bucket_no_upscale = false
 bucket_reso_steps = 64
-min_bucket_reso = 768
+min_bucket_reso = 512
 
   [[datasets.subsets]]
   image_dir = "{dataset_dir}"
@@ -210,3 +215,24 @@ def check_status(job_id: str):
     if job_id not in job_status:
         raise HTTPException(status_code=404, detail="Job ID not found")
     return job_status[job_id]
+
+
+
+@app.on_event("startup")
+async def notify_when_ready():
+    try:
+        NEXTJS_BACKEND_URL = os.getenv("NEXTJS_BACKEND_URL", "https://www.wispi.art")
+        SUBSCRIPTION_ID = os.getenv("PUBLIC_SUBSCRIPTION_ID", "public")
+        print(f"📣 Notifying backend at {NEXTJS_BACKEND_URL}/api/runpod/markReady")
+
+        response = requests.post(f"{NEXTJS_BACKEND_URL}/api/runpod/markReady", json={
+            "subscription_id": SUBSCRIPTION_ID,
+            "status": "ready"
+        })
+
+        if response.status_code == 200:
+            print("✅ Successfully notified backend.")
+        else:
+            print(f"⚠️ Failed to notify backend: {response.status_code} - {response.text}")
+    except Exception as e:
+        print("❌ Error notifying backend:", e)
