@@ -227,7 +227,8 @@ async def notify_when_ready():
 
         response = requests.post(f"{NEXTJS_BACKEND_URL}/api/runpod/markReady", json={
             "subscription_id": SUBSCRIPTION_ID,
-            "status": "ready"
+            "status": "ready",
+            "runtime": "lora-container-runtime"
         })
 
         if response.status_code == 200:
