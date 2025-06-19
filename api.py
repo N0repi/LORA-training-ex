@@ -13,6 +13,7 @@ from typing import List, Optional  # Add Optional here
 from datetime import datetime
 from ipfs_api import download
 from google.cloud import storage
+import json
 
 app = FastAPI()
 
@@ -175,6 +176,25 @@ min_bucket_reso = 512
         ]
         # --full_bf16
 
+        # Prepare full training metadata to store as JSON
+        params_dict = {
+            "model_name": params.model_name,
+            "dataset_name": params.dataset_name,
+            "trained_at": datetime.utcnow().isoformat() + "Z",
+            "wallet_address": params.wallet_address,
+            "cids": params.cids,
+            "tags": params.tags,
+            "command": command  # full raw list form of CLI command used
+        }
+
+        # Remove keys with empty values
+        params_dict = {k: v for k, v in params_dict.items() if v not in [None, [], {}]}
+
+        # Write metadata to file
+        params_path = f"{model_dir}/{params.model_name}.json"
+        with open(params_path, "w") as f:
+            json.dump(params_dict, f, indent=2)
+
         # Execute training
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         stdout, stderr = process.communicate()
@@ -198,16 +218,16 @@ min_bucket_reso = 512
 
 def sync_to_gcs(wallet_address, model_name):
     model_file = f"/workspace/project/sd-scripts/user/{wallet_address}/models/{model_name}.safetensors"
-    gcs_destination = f"gs://lorabucketnorepi/user/{wallet_address}/models/{model_name}.safetensors"
+    param_file = f"/workspace/project/sd-scripts/user/{wallet_address}/models/{model_name}.json"
 
-    # Upload only models folder directly to the user's bucket directory
-    command = [
-        "gsutil", "cp",
-        model_file,
-        gcs_destination
-    ]
+    gcs_destination_model = f"gs://lorabucketnorepi/user/{wallet_address}/models/{model_name}.safetensors"
+    gcs_destination_param = f"gs://lorabucketnorepi/user/{wallet_address}/models/{model_name}.json"
 
-    subprocess.run(command, check=True)
+    # Upload model
+    subprocess.run(["gsutil", "cp", model_file, gcs_destination_model], check=True)
+
+    # Upload metadata JSON
+    subprocess.run(["gsutil", "cp", param_file, gcs_destination_param], check=True)
 
 
 @app.get("/train/status/{job_id}")
@@ -228,7 +248,7 @@ async def notify_when_ready():
         response = requests.post(f"{NEXTJS_BACKEND_URL}/api/runpod/markReady", json={
             "subscription_id": SUBSCRIPTION_ID,
             "status": "ready",
-            "runtime": "lora-container-runtime"
+            "runtime": "lora-container-runtime",
         })
 
         if response.status_code == 200:
