@@ -137,9 +137,6 @@ min_bucket_reso = 512
         # Prepare model output path
         model_output_path = os.path.join(model_subdir, f"{params.model_name}.safetensors")
 
-        # Prepare JSON metadata file path
-        params_path = os.path.join(model_subdir, f"{params.model_name}.json")
-
         # Command to execute
         command = [
             "accelerate", "launch",
@@ -198,7 +195,7 @@ min_bucket_reso = 512
         params_dict = {k: v for k, v in params_dict.items() if v not in [None, [], {}]}
 
         # Write metadata to file
-        params_path = f"{model_dir}/{params.model_name}.json"
+        params_path = f"{model_subdir}/{params.model_name}.json"
         with open(params_path, "w") as f:
             json.dump(params_dict, f, indent=2)
 
@@ -231,11 +228,12 @@ def sync_to_gcs(wallet_address, model_name):
     gcs_destination_model = f"gs://lorabucketnorepi/user/{wallet_address}/models/{model_name}/{model_name}.safetensors"
     gcs_destination_param = f"gs://lorabucketnorepi/user/{wallet_address}/models/{model_name}/{model_name}.json"
 
-    # Upload model
-    subprocess.run(["gsutil", "cp", model_file, gcs_destination_model], check=True)
-
-    # Upload metadata JSON
-    subprocess.run(["gsutil", "cp", param_file, gcs_destination_param], check=True)
+    # Upload model and metadata JSON
+    subprocess.run([
+        "gsutil", "-m", "cp", "-r",
+        model_subdir,
+        f"gs://lorabucketnorepi/user/{wallet_address}/models/"
+    ], check=True)
 
 
 @app.get("/train/status/{job_id}")
