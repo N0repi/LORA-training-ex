@@ -130,8 +130,15 @@ min_bucket_reso = 512
   caption_dropout_rate = 0.0
 """)
 
+        # Prepare subdirectory for this model
+        model_subdir = os.path.join(model_dir, params.model_name)
+        os.makedirs(model_subdir, exist_ok=True)
+
         # Prepare model output path
-        model_output_path = f"{model_dir}/{params.model_name}.safetensors"
+        model_output_path = os.path.join(model_subdir, f"{params.model_name}.safetensors")
+
+        # Prepare JSON metadata file path
+        params_path = os.path.join(model_subdir, f"{params.model_name}.json")
 
         # Command to execute
         command = [
@@ -163,7 +170,7 @@ min_bucket_reso = 512
             "--max_train_epochs", str(params.max_train_epochs),  # Dynamic
             "--max_train_steps", str(params.max_train_steps),  # Dynamic
             "--dataset_config", config_path, # needs to be persistent per user
-            "--output_dir", model_dir, # needs to be persistent per user
+            "--output_dir", model_subdir, # needs to be persistent per user
             "--output_name", params.model_name,
             "--timestep_sampling", "shift",
             "--discrete_flow_shift", "3.1582",
@@ -217,11 +224,12 @@ min_bucket_reso = 512
 
 
 def sync_to_gcs(wallet_address, model_name):
-    model_file = f"/workspace/project/sd-scripts/user/{wallet_address}/models/{model_name}.safetensors"
-    param_file = f"/workspace/project/sd-scripts/user/{wallet_address}/models/{model_name}.json"
+    model_subdir = f"/workspace/project/sd-scripts/user/{wallet_address}/models/{model_name}"
+    model_file = f"{model_subdir}/{model_name}.safetensors"
+    param_file = f"{model_subdir}/{model_name}.json"
 
-    gcs_destination_model = f"gs://lorabucketnorepi/user/{wallet_address}/models/{model_name}.safetensors"
-    gcs_destination_param = f"gs://lorabucketnorepi/user/{wallet_address}/models/{model_name}.json"
+    gcs_destination_model = f"gs://lorabucketnorepi/user/{wallet_address}/models/{model_name}/{model_name}.safetensors"
+    gcs_destination_param = f"gs://lorabucketnorepi/user/{wallet_address}/models/{model_name}/{model_name}.json"
 
     # Upload model
     subprocess.run(["gsutil", "cp", model_file, gcs_destination_model], check=True)
