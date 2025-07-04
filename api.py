@@ -14,6 +14,7 @@ from datetime import datetime
 from ipfs_api import download
 from google.cloud import storage
 import json
+import asyncio
 
 app = FastAPI()
 
@@ -243,12 +244,35 @@ def check_status(job_id: str):
     return job_status[job_id]
 
 
-
 @app.on_event("startup")
 async def notify_when_ready():
     try:
         NEXTJS_BACKEND_URL = os.getenv("NEXTJS_BACKEND_URL", "https://www.wispi.art")
         SUBSCRIPTION_ID = os.getenv("PUBLIC_SUBSCRIPTION_ID", "public")
+
+        # Add a health check endpoint
+        @app.get("/health")
+        async def health_check():
+            return {"status": "ok"}
+
+        # Wait for FastAPI to be truly ready and verify health
+        await asyncio.sleep(5)  # Initial delay for FastAPI startup
+
+        # Verify our own health endpoint is responding
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                health_response = requests.get("http://localhost:8000/health")
+                print("health_response:", health_response)
+                if health_response.status_code == 200:
+                    break
+            except Exception as e:
+                print(f"Health check attempt {attempt + 1} failed:", e)
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)
+                else:
+                    raise Exception("Health check failed after max retries")
+
         print(f"📣 Notifying backend at {NEXTJS_BACKEND_URL}/api/runpod/markReady")
 
         response = requests.post(f"{NEXTJS_BACKEND_URL}/api/runpod/markReady", json={
