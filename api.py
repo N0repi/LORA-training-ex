@@ -243,23 +243,44 @@ def check_status(job_id: str):
     return job_status[job_id]
 
 
+@app.get("/healthz")
+def health_check():
+    return {"status": "ok"}
+
 
 @app.on_event("startup")
 async def notify_when_ready():
-    try:
-        NEXTJS_BACKEND_URL = os.getenv("NEXTJS_BACKEND_URL", "https://www.wispi.art")
-        SUBSCRIPTION_ID = os.getenv("PUBLIC_SUBSCRIPTION_ID", "public")
-        print(f"📣 Notifying backend at {NEXTJS_BACKEND_URL}/api/runpod/markReady")
+    """Wait for the server to be ready before notifying the backend."""
+    import time
+    
+    NEXTJS_BACKEND_URL = os.getenv("NEXTJS_BACKEND_URL", "https://www.wispi.art")
+    SUBSCRIPTION_ID = os.getenv("PUBLIC_SUBSCRIPTION_ID", "public")
+    
+    # Wait for the server to be ready
+    max_attempts = 30  # Max retries (~30 seconds)
+    for attempt in range(max_attempts):
+        try:
+            # Check if our own health endpoint is ready
+            response = requests.get("http://localhost:8000/healthz", timeout=2)
+            if response.status_code == 200:
+                print(f"✅ Server is live. Notifying backend at {NEXTJS_BACKEND_URL}/api/runpod/markReady")
+                
+                # Now notify the backend
+                response = requests.post(f"{NEXTJS_BACKEND_URL}/api/runpod/markReady", json={
+                    "subscription_id": SUBSCRIPTION_ID,
+                    "status": "ready",
+                    "runtime": "lora-container-runtime",
+                })
 
-        response = requests.post(f"{NEXTJS_BACKEND_URL}/api/runpod/markReady", json={
-            "subscription_id": SUBSCRIPTION_ID,
-            "status": "ready",
-            "runtime": "lora-container-runtime",
-        })
-
-        if response.status_code == 200:
-            print("✅ Successfully notified backend.")
-        else:
-            print(f"⚠️ Failed to notify backend: {response.status_code} - {response.text}")
-    except Exception as e:
-        print("❌ Error notifying backend:", e)
+                if response.status_code == 200:
+                    print("✅ Successfully notified backend.")
+                else:
+                    print(f"⚠️ Failed to notify backend: {response.status_code} - {response.text}")
+                return
+        except requests.exceptions.ConnectionError:
+            print(f"⏳ Waiting for server to be available... ({attempt + 1}/{max_attempts})")
+        except Exception as e:
+            print(f"❌ Error during startup check: {e}")
+        time.sleep(1)  # Wait 1 second before retrying
+    
+    print("❌ Server did not become ready in time.")
