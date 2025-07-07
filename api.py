@@ -20,6 +20,7 @@ app = FastAPI()
 
 # Define the request body schema
 class TrainParams(BaseModel):
+    subscriptionId: str
     wallet_address: str
     model_name: str = Field(..., min_length=1)
     network_dim: int
@@ -258,7 +259,7 @@ async def health_check():
 async def notify_backend():
     try:
         NEXTJS_BACKEND_URL = os.getenv("NEXTJS_BACKEND_URL", "https://www.wispi.art")
-        SUBSCRIPTION_ID = os.getenv("PUBLIC_SUBSCRIPTION_ID", "public")
+        SUBSCRIPTION_ID = os.getenv("SUBSCRIPTION_ID")  # Get from env but don't default
 
         # Wait for FastAPI to be truly ready
         await ready_event.wait()
