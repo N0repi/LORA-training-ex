@@ -260,11 +260,11 @@ async def notify_backend():
     try:
         NEXTJS_BACKEND_URL = os.getenv("NEXTJS_BACKEND_URL", "https://www.wispi.art")
         SUBSCRIPTION_ID = os.getenv("SUBSCRIPTION_ID")  # Get from env but don't default
-
+        
         # Wait for FastAPI to be truly ready
         await ready_event.wait()
         await asyncio.sleep(5)  # Additional safety delay
-
+        
         print(f"📣 Notifying backend at {NEXTJS_BACKEND_URL}/api/runpod/markReady")
 
         response = requests.post(f"{NEXTJS_BACKEND_URL}/api/runpod/markReady", json={
