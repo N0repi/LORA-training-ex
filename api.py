@@ -11,10 +11,17 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import List, Optional  # Add Optional here
 from datetime import datetime
-from ipfs_api import download
-from google.cloud import storage
 import json
 import asyncio
+from google.cloud import storage
+
+# IPFS Gateway Configuration
+IPFS_GATEWAYS = [
+    "https://gateway.pinata.cloud/ipfs/",
+    "https://ipfs.io/ipfs/",
+    "https://cloudflare-ipfs.com/ipfs/",
+    "https://gateway.ipfs.io/ipfs/"
+]
 
 app = FastAPI()
 
@@ -33,13 +40,30 @@ class TrainParams(BaseModel):
     tags: Optional[dict] = {}  # Optional field, defaults to an empty dictionary
 
 job_status = {}
+
+async def download_from_ipfs(cid: str, file_path: str) -> bool:
+    """Download a file from IPFS using multiple gateways with retry logic."""
+    for gateway in IPFS_GATEWAYS:
+        try:
+            url = f"{gateway}{cid}"
+            response = requests.get(url, stream=True, timeout=30)
+            if response.status_code == 200:
+                with open(file_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                return True
+        except Exception as e:
+            print(f"Failed to download from {gateway}: {str(e)}")
+            continue
+    return False
+
 @app.post("/train")
 def train_model(params: TrainParams, background_tasks: BackgroundTasks):
     job_id = str(uuid.uuid4())
     job_status[job_id] = {"status": "in_progress", "wallet_address": params.wallet_address}
     background_tasks.add_task(run_training_and_sync, params, job_id)
     return {"message": "Training started", "job_id": job_id}
-
 
 def run_training_and_sync(params, job_id):
     try:
@@ -59,7 +83,9 @@ def run_training_and_sync(params, job_id):
                 caption_path = os.path.join(dataset_dir, f"{cid}.caption")
                 try:
                     if not os.path.isfile(file_path):
-                        download(cid, file_path)
+                        success = asyncio.run(download_from_ipfs(cid, file_path))
+                        if not success:
+                            raise HTTPException(status_code=500, detail=f"Failed to download CID {cid} from all gateways")
 
                     tags = params.tags.get(cid, None)
                     if tags:
@@ -260,11 +286,11 @@ async def notify_backend():
     try:
         NEXTJS_BACKEND_URL = os.getenv("NEXTJS_BACKEND_URL", "https://www.wispi.art")
         SUBSCRIPTION_ID = os.getenv("SUBSCRIPTION_ID")  # Get from env but don't default
-        
+
         # Wait for FastAPI to be truly ready
         await ready_event.wait()
         await asyncio.sleep(5)  # Additional safety delay
-        
+
         print(f"📣 Notifying backend at {NEXTJS_BACKEND_URL}/api/runpod/markReady")
 
         response = requests.post(f"{NEXTJS_BACKEND_URL}/api/runpod/markReady", json={
